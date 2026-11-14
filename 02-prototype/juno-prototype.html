@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Juno PM — Weekly Signal Diff (Prototype)</title>
+<style>
+:root{
+  --juno:#5B4BDB; --juno-2:#8B7BFF; --juno-bg:#F4F2FF;
+  --new:#0E9F6E; --new-bg:#E3F7EF;
+  --grow:#D97706; --grow-bg:#FDF1DE;
+  --seg:#2563EB; --seg-bg:#E5EEFF;
+  --fade:#6B7280; --fade-bg:#EEF0F3;
+  --ink:#16171D; --ink-2:#4A4D57; --ink-3:#8A8D97; --line:#E6E7EB;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;background:#1B1C22;color:var(--ink);font-size:14px;min-height:100vh;display:flex;flex-direction:column}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+a{color:inherit}
+
+/* ---------- Prototype controls ---------- */
+.proto{display:flex;align-items:center;gap:14px;padding:10px 18px;background:#111216;color:#C9CBD3;font-size:12.5px;border-bottom:1px solid #2A2B33;flex-wrap:wrap}
+.proto b{color:#fff;font-weight:600}
+.steps{display:flex;gap:6px;flex-wrap:wrap}
+.step{padding:6px 11px;border-radius:999px;background:#22232B;color:#A9ACB6;border:1px solid #30313A;font-size:12px}
+.step.on{background:var(--juno);color:#fff;border-color:var(--juno)}
+.step .n{opacity:.65;margin-right:5px}
+.proto .sp{flex:1}
+.replay{padding:6px 12px;border-radius:7px;background:#2A2B33;color:#fff;font-size:12px}
+.replay:hover{background:#383944}
+
+/* ---------- OS frame ---------- */
+.desk{flex:1;display:flex;flex-direction:column;padding:16px;background:radial-gradient(1200px 600px at 20% 0%,#3B2F8F 0%,#1B1C22 60%)}
+.menubar{display:flex;align-items:center;gap:18px;color:#E7E8EE;font-size:12.5px;padding:0 6px 10px}
+.menubar .apps{display:flex;gap:6px}
+.menubar .app{padding:4px 10px;border-radius:6px;opacity:.75}
+.menubar .app.on{background:rgba(255,255,255,.14);opacity:1}
+.menubar .app:hover{opacity:1}
+.menubar .sp{flex:1}
+.window{flex:1;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45);display:flex;flex-direction:column;min-height:640px}
+.chrome{height:34px;background:#F1F1F4;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 12px;gap:8px}
+.dots{display:flex;gap:6px}.dots i{width:11px;height:11px;border-radius:50%;background:#FF5F57}.dots i:nth-child(2){background:#FEBC2E}.dots i:nth-child(3){background:#28C840}
+.url{flex:1;max-width:520px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:7px;padding:4px 10px;font-size:12px;color:var(--ink-3);text-align:center}
+.view{display:none;flex:1;min-height:0}
+.view.on{display:flex}
+
+/* ---------- Toast ---------- */
+.toast{position:fixed;top:56px;right:24px;width:370px;background:rgba(250,250,252,.97);backdrop-filter:blur(14px);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.35);padding:12px 14px;display:flex;gap:11px;transform:translateX(420px);transition:transform .45s cubic-bezier(.2,.9,.3,1.2);z-index:50;cursor:pointer}
+.toast.show{transform:none}
+.toast .ic{width:38px;height:38px;border-radius:9px;background:#4A154B;color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+.toast .t1{font-size:12px;color:var(--ink-3);display:flex;justify-content:space-between}
+.toast .t2{font-weight:600;margin:2px 0}
+.toast .t3{font-size:12.5px;color:var(--ink-2);line-height:1.4}
+
+/* ---------- JIRA ---------- */
+.jira{flex-direction:row;background:#fff}
+.j-side{width:220px;background:#FAFBFC;border-right:1px solid var(--line);padding:14px 10px;font-size:13px}
+.j-proj{display:flex;gap:9px;align-items:center;padding:6px;margin-bottom:14px}
+.j-proj .lg{width:30px;height:30px;border-radius:6px;background:linear-gradient(135deg,#FF7A45,#F5222D);color:#fff;display:grid;place-items:center;font-weight:700}
+.j-proj small{display:block;color:var(--ink-3);font-size:11.5px}
+.j-nav div{padding:7px 9px;border-radius:5px;color:var(--ink-2)}
+.j-nav div.on{background:#E9F2FF;color:#0C66E4;font-weight:600}
+.j-main{flex:1;padding:18px 22px;overflow:auto}
+.j-crumb{font-size:12px;color:var(--ink-3)}
+.j-main h1{font-size:22px;margin:4px 0 14px;font-weight:600}
+.j-tools{display:flex;gap:8px;margin-bottom:16px;align-items:center}
+.j-tools input{border:1px solid var(--line);border-radius:4px;padding:6px 9px;width:180px;font:inherit;font-size:13px}
+.av{width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-size:11px;font-weight:600;border:2px solid #fff;margin-left:-6px}
+.cols{display:grid;grid-template-columns:repeat(4,minmax(200px,1fr));gap:12px}
+.col{background:#F7F8F9;border-radius:6px;padding:8px;min-height:420px}
+.col h4{font-size:11.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;padding:6px 6px 10px;font-weight:600}
+.card{background:#fff;border-radius:4px;box-shadow:0 1px 2px rgba(9,30,66,.25);padding:10px;margin-bottom:8px;font-size:13px;line-height:1.35}
+.card .meta{display:flex;justify-content:space-between;align-items:center;margin-top:9px;font-size:11.5px;color:var(--ink-3)}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 5px;border-radius:3px;margin-top:7px}
+.card.hl{outline:2px solid var(--juno);outline-offset:1px}
+.jbadge{font-size:10.5px;background:var(--juno-bg);color:var(--juno);padding:1px 6px;border-radius:3px;font-weight:600}
+
+/* ---------- SLACK ---------- */
+.slack{flex-direction:row}
+.s-ws{width:64px;background:#3F0E40;display:flex;flex-direction:column;align-items:center;padding-top:12px;gap:10px}
+.s-ws .w{width:36px;height:36px;border-radius:9px;background:#fff;color:#3F0E40;display:grid;place-items:center;font-weight:800}
+.s-side{width:240px;background:#4A154B;color:#D9C9DA;padding:12px 0;font-size:14px}
+.s-side .wsname{color:#fff;font-weight:700;font-size:16px;padding:2px 16px 14px}
+.s-side .sec{font-size:12.5px;padding:10px 16px 4px;opacity:.8}
+.s-side .ch{padding:4px 16px;display:flex;align-items:center;gap:8px}
+.s-side .ch.on{background:#1164A3;color:#fff}
+.s-side .ch .b{margin-left:auto;background:#E01E5A;color:#fff;font-size:11px;border-radius:9px;padding:0 6px;font-weight:700}
+.s-side .jdot{width:18px;height:18px;border-radius:5px;background:var(--juno);display:grid;place-items:center;color:#fff;font-size:10px;font-weight:800}
+.s-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.s-head{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.s-head b{font-size:16px}
+.app-pill{font-size:10.5px;background:#E8E8E8;color:#555;padding:1px 5px;border-radius:3px;font-weight:600}
+.s-feed{flex:1;overflow:auto;padding:16px 20px}
+.s-day{text-align:center;font-size:12px;font-weight:600;color:var(--ink-2);margin:6px 0 16px;position:relative}
+.s-day span{background:#fff;padding:3px 14px;border:1px solid var(--line);border-radius:12px;position:relative;z-index:1}
+.s-day:before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--line)}
+.msg{display:flex;gap:10px;margin-bottom:18px}
+.msg .pic{width:36px;height:36px;border-radius:7px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800}
+.msg .who{font-weight:700}.msg .tm{font-size:12px;color:var(--ink-3);margin-left:6px;font-weight:400}
+.msg .body{line-height:1.5;color:#1D1C1D;max-width:720px}
+.blk{border-left:4px solid var(--juno);padding:10px 14px;margin-top:8px;background:#FBFBFE;border-radius:0 6px 6px 0}
+.blk h5{font-size:15px;margin-bottom:6px}
+.blk .row{margin:7px 0;display:flex;gap:8px;align-items:flex-start}
+.chip{font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;flex:none}
+.c-new{background:var(--new-bg);color:var(--new)}
+.c-grow{background:var(--grow-bg);color:var(--grow)}
+.c-seg{background:var(--seg-bg);color:var(--seg)}
+.c-fade{background:var(--fade-bg);color:var(--fade)}
+.btns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.sbtn{border:1px solid #BBB;border-radius:5px;padding:6px 12px;font-weight:600;font-size:13px;background:#fff}
+.sbtn.pri{background:#007A5A;border-color:#007A5A;color:#fff}
+.sbtn:hover{filter:brightness(.96)}
+.pulse{animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,122,90,.5)}70%{box-shadow:0 0 0 9px rgba(0,122,90,0)}100%{box-shadow:0 0 0 0 rgba(0,122,90,0)}}
+.s-input{margin:0 20px 16px;border:1px solid #BBB;border-radius:8px;padding:11px 12px;color:var(--ink-3)}
+.foot{font-size:12px;color:var(--ink-3);margin-top:8px}
+
+/* ---------- NOTION ---------- */
+.notion{flex-direction:row}
+.n-side{width:230px;background:#F7F7F5;padding:12px 8px;font-size:13.5px;color:#5F5E5B;border-right:1px solid #EDEDEB}
+.n-side .it{padding:4px 8px;border-radius:4px}
+.n-side .it.on{background:#EAEAE8;color:#37352F;font-weight:500}
+.n-side .grp{font-size:11.5px;padding:14px 8px 4px;font-weight:600}
+.n-main{flex:1;overflow:auto}
+.n-cover{height:110px;background:linear-gradient(120deg,#5B4BDB,#9B8CFF 60%,#C8BFFF)}
+.n-doc{max-width:780px;margin:0 auto;padding:0 40px 60px;color:#37352F}
+.n-icon{font-size:56px;margin-top:-34px;width:72px;height:72px;background:#fff;border-radius:12px;display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.n-doc h1{font-size:34px;font-weight:700;margin:14px 0 10px;letter-spacing:-.01em}
+.props{font-size:13.5px;margin-bottom:18px}
+.props div{display:flex;padding:4px 0}
+.props span:first-child{width:150px;color:#91918E}
+.callout{background:#F4F2FF;border-radius:6px;padding:14px 16px;display:flex;gap:10px;line-height:1.55;margin:10px 0 20px}
+.n-doc h2{font-size:22px;margin:28px 0 8px;font-weight:600;display:flex;align-items:center;gap:10px}
+.n-doc p{line-height:1.6;margin:6px 0}
+.toggle{margin:4px 0;border-radius:4px}
+.toggle>summary{list-style:none;cursor:pointer;padding:6px 4px;display:flex;gap:8px;align-items:flex-start;line-height:1.5}
+.toggle>summary::-webkit-details-marker{display:none}
+.toggle>summary:before{content:"▸";color:#91918E;transition:transform .15s;display:inline-block;margin-top:1px}
+.toggle[open]>summary:before{transform:rotate(90deg)}
+.toggle>summary:hover{background:#F7F7F5}
+.toggle .inner{padding:4px 0 10px 26px}
+.q{border-left:3px solid #37352F;padding:2px 12px;margin:8px 0;font-size:14px;line-height:1.5}
+.q small{display:block;color:#91918E;font-size:12px;margin-top:3px}
+.q small a{color:#91918E}
+.n-table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}
+.n-table td,.n-table th{border:1px solid #EDEDEB;padding:7px 9px;text-align:left}
+.n-table th{color:#91918E;font-weight:500;background:#FBFBFA}
+.n-cta{display:inline-flex;gap:8px;align-items:center;background:var(--juno);color:#fff;padding:8px 14px;border-radius:6px;font-weight:600;margin-top:10px}
+
+/* ---------- JUNO ---------- */
+.juno{flex-direction:row;background:#FAFAFC}
+.ju-side{width:230px;background:#14121F;color:#BDB9D6;padding:16px 12px;display:flex;flex-direction:column;gap:2px;font-size:13.5px}
+.ju-logo{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;font-size:16px;padding:4px 8px 18px}
+.ju-logo .mk{width:30px;height:30px;border-radius:9px;background:conic-gradient(from 200deg,#5B4BDB,#8B7BFF,#C8BFFF,#5B4BDB);display:grid;place-items:center;font-size:15px}
+.ju-logo small{display:block;font-weight:500;color:#8F8AB0;font-size:11px}
+.ju-side .nav{padding:8px 10px;border-radius:7px;display:flex;gap:9px;align-items:center}
+.ju-side .nav.on{background:#2A2640;color:#fff}
+.ju-side .nav:hover{background:#221F33}
+.ju-side .grp{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#6E6990;padding:16px 10px 6px}
+.src{display:flex;align-items:center;gap:8px;padding:5px 10px;font-size:12.5px}
+.src i{width:7px;height:7px;border-radius:50%;background:#2FD18A}
+.src em{margin-left:auto;font-style:normal;color:#6E6990}
+.ju-main{flex:1;overflow:auto;padding:22px 28px;min-width:0}
+.ju-top{display:flex;align-items:flex-end;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.ju-top h1{font-size:23px;font-weight:700;letter-spacing:-.01em}
+.ju-top p{color:var(--ink-3);font-size:13px;margin-top:4px}
+.ju-top .sp{flex:1}
+.wk{display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:13px}
+.wk button{padding:7px 10px;color:var(--ink-3)}
+.wk span{padding:7px 6px;font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 15px;cursor:pointer;transition:.15s}
+.kpi:hover{border-color:#C9C3F5}
+.kpi.on{border-color:var(--juno);box-shadow:0 0 0 3px rgba(91,75,219,.12)}
+.kpi .l{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.kpi .l i{width:8px;height:8px;border-radius:2px}
+.kpi .v{font-size:26px;font-weight:700;margin-top:4px}
+.kpi .s{font-size:11.5px;color:var(--ink-3)}
+.filters{display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap}
+.f{padding:6px 11px;border-radius:999px;border:1px solid var(--line);background:#fff;font-size:12.5px;color:var(--ink-2)}
+.f.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.filters .note{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.themes{display:grid;gap:10px}
+.theme{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;grid-template-columns:1fr 150px 130px 90px;gap:16px;align-items:center;cursor:pointer;transition:.15s}
+.theme:hover{border-color:#C9C3F5;box-shadow:0 4px 16px rgba(91,75,219,.08)}
+.theme.sel{border-color:var(--juno);box-shadow:0 0 0 3px rgba(91,75,219,.12)}
+.theme .tt{font-weight:600;font-size:14.5px;margin:5px 0 3px}
+.theme .ds{font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.theme .segs{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.seg{font-size:11px;padding:2px 7px;border-radius:4px;background:#F1F1F5;color:var(--ink-2)}
+.seg.first{background:var(--seg-bg);color:var(--seg);font-weight:600}
+.delta{text-align:right}
+.delta b{font-size:18px}
+.delta small{display:block;font-size:11.5px;color:var(--ink-3)}
+.srcmix{display:flex;gap:6px;font-size:11.5px;color:var(--ink-2)}
+.srcmix span{display:flex;align-items:center;gap:4px}
+.sq{width:16px;height:16px;border-radius:4px;display:grid;place-items:center;color:#fff;font-size:9px;font-weight:800}
+.sq.j{background:#0C66E4}.sq.s{background:#4A154B}.sq.n{background:#37352F}
+.verified{font-size:11px;color:var(--new);font-weight:600;margin-left:6px}
+.flagged{font-size:11px;color:#C2410C;font-weight:600;margin-left:6px}
+.stable{margin-top:14px;font-size:12.5px;color:var(--ink-3);padding:12px 16px;border:1px dashed var(--line);border-radius:10px;background:#fff}
+
+/* drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;max-width:96vw;background:#fff;box-shadow:-20px 0 60px rgba(0,0,0,.25);transform:translateX(105%);transition:transform .3s ease;z-index:40;display:flex;flex-direction:column}
+.drawer.open{transform:none}
+.dr-head{padding:18px 22px 14px;border-bottom:1px solid var(--line)}
+.dr-head .x{float:right;font-size:20px;color:var(--ink-3);padding:0 4px}
+.dr-head h3{font-size:18px;margin:8px 0 6px;line-height:1.3}
+.dr-head p{font-size:13px;color:var(--ink-2);line-height:1.5}
+.timer{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:12px;color:var(--ink-3)}
+.bar{flex:1;height:5px;background:#EEE;border-radius:9px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--juno);transition:width 1s linear}
+.dr-body{flex:1;overflow:auto;padding:16px 22px}
+.dr-sec{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:600;margin:6px 0 8px}
+.why{background:var(--juno-bg);border-radius:10px;padding:12px 14px;font-size:13px;line-height:1.55;margin-bottom:16px}
+.why b{color:var(--juno)}
+.qcard{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:9px}
+.qcard .qh{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-3);margin-bottom:6px}
+.qcard .qh a{margin-left:auto;color:var(--juno);font-weight:600;text-decoration:none}
+.qcard .qt{font-size:13.5px;line-height:1.5}
+.qcard mark{background:#FFF2B3;padding:0 2px;border-radius:2px}
+.dr-foot{border-top:1px solid var(--line);padding:14px 22px;display:flex;gap:8px;flex-wrap:wrap}
+.jbtn{padding:8px 13px;border-radius:8px;font-weight:600;font-size:13px;border:1px solid var(--line);background:#fff}
+.jbtn.pri{background:var(--juno);color:#fff;border-color:var(--juno)}
+.jbtn.ok{background:var(--new);color:#fff;border-color:var(--new)}
+.jbtn:hover{filter:brightness(.97)}
+.scrim{position:fixed;inset:0;background:rgba(10,10,20,.25);opacity:0;pointer-events:none;transition:.3s;z-index:39}
+.scrim.on{opacity:1;pointer-events:auto}
+.spark{display:block}
+.hint{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#111216;color:#fff;padding:9px 16px;border-radius:999px;font-size:12.5px;box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:60;transition:opacity .3s}
+.snack{position:fixed;left:50%;bottom:70px;transform:translate(-50%,20px);opacity:0;background:var(--ink);color:#fff;padding:10px 16px;border-radius:8px;font-size:13px;z-index:70;transition:.3s}
+.snack.on{opacity:1;transform:translate(-50%,0)}
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.theme{grid-template-columns:1fr 110px}.theme .spk,.theme .srcmixw{display:none}.j-side,.n-side{display:none}}
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <b>Juno PM · Prototype</b><span>Scenario: Weekly Signal Diff on a Monday morning</span>
+  <div class="steps" id="steps">
+    <button class="step" data-go="jira"><span class="n">1</span>Working in Jira</button>
+    <button class="step" data-go="slack"><span class="n">2</span>Slack ping 07:15</button>
+    <button class="step" data-go="notion"><span class="n">3</span>Notion weekly report</button>
+    <button class="step" data-go="juno"><span class="n">4</span>Signal detail in Juno</button>
+  </div>
+  <div class="sp"></div>
+  <button class="replay" id="replay">↺ Replay from start</button>
+</div>
+
+<div class="desk">
+  <div class="menubar">
+    <b></b><span style="font-weight:600">Maria’s MacBook</span>
+    <div class="apps">
+      <button class="app" data-go="jira">Jira</button>
+      <button class="app" data-go="slack">Slack</button>
+      <button class="app" data-go="notion">Notion</button>
+      <button class="app" data-go="juno">Juno</button>
+    </div>
+    <div class="sp"></div>
+    <span>Mon 16 Nov&nbsp; <b id="clock">07:14</b></span>
+  </div>
+
+  <div class="window">
+    <div class="chrome"><div class="dots"><i></i><i></i><i></i></div><div class="url" id="url">rocketship.atlassian.net/jira/software/projects/RS/boards/12</div></div>
+
+    <!-- ================= JIRA ================= -->
+    <section class="view jira" id="v-jira">
+      <aside class="j-side">
+        <div class="j-proj"><div class="lg">R</div><div><b>RocketShip</b><small>Software project</small></div></div>
+        <div class="j-nav">
+          <div>Timeline</div><div>Backlog</div><div class="on">Board</div><div>Reports</div><div>Issues</div><div>Components</div>
+        </div>
+      </aside>
+      <div class="j-main">
+        <div class="j-crumb">Projects / RocketShip / RS board</div>
+        <h1>RS Sprint 47</h1>
+        <div class="j-tools">
+          <input placeholder="Search board">
+          <span><span class="av" style="background:#5B4BDB;margin-left:0">MJ</span><span class="av" style="background:#0E9F6E">TK</span><span class="av" style="background:#D97706">RA</span><span class="av" style="background:#2563EB">LP</span></span>
+          <span style="margin-left:auto;font-size:12px;color:var(--ink-3)">6 days remaining</span>
+        </div>
+        <div class="cols" id="jcols"></div>
+      </div>
+    </section>
+
+    <!-- ================= SLACK ================= -->
+    <section class="view slack" id="v-slack">
+      <div class="s-ws"><div class="w">R</div></div>
+      <aside class="s-side">
+        <div class="wsname">RocketShip</div>
+        <div class="sec">▾ Channels</div>
+        <div class="ch"># product-squad-growth</div>
+        <div class="ch"># cs-escalations</div>
+        <div class="ch"># feedback-enterprise</div>
+        <div class="ch"># release-notes</div>
+        <div class="sec">▾ Apps</div>
+        <div class="ch on"><span class="jdot">J</span> Juno PM <span class="b">1</span></div>
+        <div class="ch"><span class="jdot" style="background:#0C66E4">J</span> Jira Cloud</div>
+        <div class="sec">▾ Direct messages</div>
+        <div class="ch">● Tomás (Eng Lead)</div>
+        <div class="ch">○ Priya (CSM)</div>
+      </aside>
+      <div class="s-main">
+        <div class="s-head"><span class="jdot" style="width:24px;height:24px;border-radius:6px;background:var(--juno);display:grid;place-items:center;color:#fff;font-weight:800;font-size:12px">J</span><b>Juno PM</b><span class="app-pill">APP</span></div>
+        <div class="s-feed">
+          <div class="s-day"><span>Monday 9 November</span></div>
+          <div class="msg" style="opacity:.6">
+            <div class="pic" style="background:var(--juno)">J</div>
+            <div><div class="who">Juno PM <span class="app-pill">APP</span><span class="tm">07:15</span></div>
+            <div class="body">Weekly Signal Diff · 2–8 Nov — 3 changes. <u>Open report</u></div></div>
+          </div>
+          <div class="s-day"><span>Today</span></div>
+          <div class="msg">
+            <div class="pic" style="background:var(--juno)">J</div>
+            <div style="min-width:0">
+              <div class="who">Juno PM <span class="app-pill">APP</span><span class="tm">07:15</span></div>
+              <div class="body">
+                Good morning Maria ☀️ Your <b>Weekly Signal Diff</b> for <b>9–15 Nov</b> is ready. I only list what <i>changed</i> vs last week. 14 stable themes are left out.
+                <div class="blk" id="slackblk"></div>
+                <div class="btns">
+                  <button class="sbtn pri pulse" data-go="notion">📄 Open Notion report</button>
+                  <button class="sbtn" data-go="juno">✦ Open in Juno</button>
+                  <button class="sbtn" onclick="snack('Snoozed until 10:00')">Snooze</button>
+                </div>
+                <div class="foot">Sources: 214 Jira tickets · 96 Slack threads (1,380 msgs) · 37 Notion docs · last 7 days</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="s-input">Message Juno PM. Try “why is SCIM new?”</div>
+      </div>
+    </section>
+
+    <!-- ================= NOTION ================= -->
+    <section class="view notion" id="v-notion">
+      <aside class="n-side">
+        <div class="it" style="font-weight:600;color:#37352F">🚀 RocketShip Product</div>
+        <div class="grp">Teamspace</div>
+        <div class="it">📌 Roadmap H2</div>
+        <div class="it">🧭 Product principles</div>
+        <div class="it">📂 Customer interviews</div>
+        <div class="grp">Juno · Weekly Signal Diff</div>
+        <div class="it on">✦ 9–15 Nov 2026</div>
+        <div class="it">✦ 2–8 Nov 2026</div>
+        <div class="it">✦ 26 Oct – 1 Nov 2026</div>
+        <div class="it">✦ 19–25 Oct 2026</div>
+      </aside>
+      <div class="n-main">
+        <div class="n-cover"></div>
+        <div class="n-doc">
+          <div class="n-icon">✦</div>
+          <h1>Weekly Signal Diff · 9–15 Nov 2026</h1>
+          <div class="props">
+            <div><span>Generated by</span><span>✦ Juno PM · Mon 16 Nov, 07:00</span></div>
+            <div><span>Compared with</span><span>2–8 Nov 2026</span></div>
+            <div><span>Owner</span><span>Maria Jorge</span></div>
+            <div><span>Sources</span><span>Jira (214) · Slack (96 threads) · Notion (37)</span></div>
+            <div><span>Status</span><span style="background:#FDECC8;padding:0 6px;border-radius:3px">To review</span></div>
+          </div>
+          <div class="callout"><span>💡</span><div><b>How to read this.</b> This is a diff, not a summary. Each theme is <b>New</b>, <b>Growing</b>, <b>Fading</b>, or showing up in a <b>New segment</b> it has never appeared in before. Expand any theme to see the raw quotes and check it in about 30 seconds.</div></div>
+          <h2>TL;DR</h2>
+          <div id="ntldr"></div>
+          <div id="nsections"></div>
+          <h2>Not reported</h2>
+          <p style="color:#91918E">14 themes are stable (change of ±20% or less), e.g. “Dashboard load time”, “Role permissions granularity”, “Mobile app parity”. <u>See all in Juno</u></p>
+          <h2>Method</h2>
+          <table class="n-table">
+            <tr><th>Rule</th><th>Definition</th></tr>
+            <tr><td>New</td><td>0 mentions in any of the previous 6 weeks, and ≥3 mentions from 2 or more accounts</td></tr>
+            <tr><td>Growing</td><td>Up more than 50% week-over-week, with ≥5 mentions</td></tr>
+            <tr><td>Fading</td><td>Down more than 50% week-over-week</td></tr>
+            <tr><td>New segment</td><td>First appearance in a segment (SMB / Mid-Market / Enterprise / vertical)</td></tr>
+          </table>
+          <button class="n-cta" data-go="juno">✦ Open all signal details in Juno →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= JUNO ================= -->
+    <section class="view juno" id="v-juno">
+      <aside class="ju-side">
+        <div class="ju-logo"><div class="mk">✦</div><div>Juno PM<small>AI Associate PM</small></div></div>
+        <div class="nav on">◐ Weekly diff</div>
+        <div class="nav">≡ All signals</div>
+        <div class="nav">◫ Segments</div>
+        <div class="nav">☰ Reports archive</div>
+        <div class="nav">⚙ Rules & thresholds</div>
+        <div class="grp">Connected sources</div>
+        <div class="src"><i></i>Jira · RS, SUP<em>214</em></div>
+        <div class="src"><i></i>Slack · 9 channels<em>96</em></div>
+        <div class="src"><i></i>Notion · 3 DBs<em>37</em></div>
+        <div class="grp">Schedule</div>
+        <div class="src" style="color:#8F8AB0">Mondays 07:00 → Slack 07:15</div>
+      </aside>
+      <div class="ju-main">
+        <div class="ju-top">
+          <div><h1>What changed this week</h1><p>9–15 Nov vs 2–8 Nov · 1,647 signals processed · 20 themes tracked · 6 changed</p></div>
+          <div class="sp"></div>
+          <div class="wk"><button>‹</button><span>Week 46 · 9–15 Nov</span><button>›</button></div>
+        </div>
+        <div class="kpis" id="kpis"></div>
+        <div class="filters" id="filters"></div>
+        <div class="themes" id="themes"></div>
+        <div class="stable">＋ 14 stable themes hidden (change of ±20% or less). Juno leaves out what didn’t move.</div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- toast -->
+<div class="toast" id="toast" data-go="slack">
+  <div class="ic">#</div>
+  <div style="flex:1">
+    <div class="t1"><span>Slack · Juno PM</span><span>now</span></div>
+    <div class="t2">Your Weekly Signal Diff is ready ✦</div>
+    <div class="t3">2 new themes · 2 growing · 1 new segment · 2 fading. Biggest: SCIM de-provisioning (Enterprise, 14 mentions).</div>
+  </div>
+</div>
+
+<!-- drawer -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer"></aside>
+<div class="hint" id="hint">Click the notification ↗</div>
+<div class="snack" id="snack"></div>
+
+<script>
+/* ---------------- DATA ---------------- */
+const TYPES={
+  new:{label:"New",cls:"c-new",color:"var(--new)"},
+  grow:{label:"Growing",cls:"c-grow",color:"var(--grow)"},
+  seg:{label:"New segment",cls:"c-seg",color:"var(--seg)"},
+  fade:{label:"Fading",cls:"c-fade",color:"var(--fade)"}
+};
+const THEMES=[
+ {id:"t1",type:"new",title:"SCIM de-provisioning fails silently after Okta changes",
+  desc:"Users removed in Okta keep active RocketShip seats for 24–72h. It is coming up as a security and renewal blocker.",
+  now:14,prev:0,hist:[0,0,0,0,0,14],segs:["Enterprise"],firstSeg:null,accounts:["Halcyon Bank","Vela Health","Northwind"],
+  src:{j:6,s:5,n:3},arr:"$1.2M ARR in renewals within 90d",
+  why:"<b>New:</b> 0 mentions in the previous 6 weeks. 14 this week from 3 Enterprise accounts. 2 of them are in a renewal window.",
+  quotes:[
+   {s:"j",ref:"SUP-2291",who:"Support L2 · Halcyon Bank",t:"Users we <mark>removed in Okta on Tuesday still had active seats</mark> on Thursday. Security flagged it in the audit."},
+   {s:"s",ref:"#cs-escalations",who:"Priya (CSM) · 12 Nov",t:"Halcyon says this is a <mark>blocker for the renewal</mark> unless we can prove de-provisioning is near real-time."},
+   {s:"n",ref:"QBR – Vela Health",who:"Account notes · 13 Nov",t:"They asked if SCIM deletes are synchronous. <mark>We couldn’t confirm</mark>. Follow-up owed by Friday."},
+   {s:"j",ref:"RS-4821",who:"Bug · Platform squad",t:"SCIM DELETE returns 204 but the seat job is queued behind the nightly sync. <mark>No error surfaced</mark>."}
+  ]},
+ {id:"t2",type:"grow",title:"Bulk CSV export times out on large workspaces",
+  desc:"Exports over ~50k rows fail after 60s. Customers are building workarounds with the API.",
+  now:11,prev:4,hist:[2,3,2,3,4,11],segs:["Mid-Market","Enterprise"],firstSeg:null,accounts:["Brightline","Kestrel Logistics","Orbitals","+4"],
+  src:{j:5,s:4,n:2},arr:"7 accounts",
+  why:"<b>Growing:</b> 4 → 11 mentions (+175%). The spike started after workspace limits were raised in release 4.12 on 5 Nov.",
+  quotes:[
+   {s:"j",ref:"SUP-2310",who:"Kestrel Logistics",t:"Export <mark>spins for a minute then shows ‘Something went wrong’</mark>. Happens every time over 60k rows."},
+   {s:"s",ref:"#feedback-midmarket",who:"Daniel (AE) · 11 Nov",t:"Brightline’s ops lead is <mark>scripting the API just to get a CSV</mark>. Not a great look mid-expansion."},
+   {s:"n",ref:"Interview – Orbitals",who:"Discovery notes · 10 Nov",t:"“Monthly export for finance is the one thing we do every month and it breaks.”"}
+  ]},
+ {id:"t3",type:"seg",title:"Audit log retention beyond 90 days",
+  desc:"This was an Enterprise-only request until now. This week it appeared for the first time in SMB, from fintech accounts.",
+  now:9,prev:6,hist:[5,6,4,6,6,9],segs:["Enterprise","SMB · Fintech"],firstSeg:"SMB · Fintech",accounts:["Ledgerly","Paystack-like Co.","Coinwise"],
+  src:{j:2,s:4,n:3},arr:"3 new SMB accounts",
+  why:"<b>New segment:</b> first mentions ever from SMB (3 accounts, all fintech). They cite new compliance audits (SOC 2 / DORA). Enterprise volume is stable.",
+  quotes:[
+   {s:"s",ref:"#sales-smb",who:"Inês (SDR) · 10 Nov",t:"Ledgerly is <mark>blocked on procurement</mark>. Their auditor needs 12 months of audit logs."},
+   {s:"n",ref:"Call notes – Coinwise",who:"Sales call · 12 Nov",t:"They’re a 40-person fintech. <mark>DORA readiness</mark> means they need longer log retention than our 90 days."},
+   {s:"j",ref:"SUP-2302",who:"Coinwise",t:"Can we export audit logs older than 90 days? <mark>Our SOC 2 auditor is asking</mark>."}
+  ]},
+ {id:"t4",type:"new",title:"Confusing usage-based invoice line items",
+  desc:"There is a new pricing page and the first usage-based invoices went out. Admins can’t map line items to their usage.",
+  now:7,prev:0,hist:[0,0,0,0,0,7],segs:["SMB","Mid-Market"],firstSeg:null,accounts:["Fennel","Arbor Studio","Quillmate","+2"],
+  src:{j:4,s:3,n:0},arr:"5 accounts",
+  why:"<b>New:</b> starts the same week as the first usage-based billing cycle (1 Nov). It will probably grow as more invoices go out.",
+  quotes:[
+   {s:"j",ref:"SUP-2318",who:"Fennel · Admin",t:"What is ‘<mark>Workflow units – tier 2</mark>’? I can’t find it anywhere in the product."},
+   {s:"s",ref:"#billing-ops",who:"Marta (Finance) · 13 Nov",t:"Three disputes this week, <mark>all about the same line item</mark>."}
+  ]},
+ {id:"t5",type:"fade",title:"Onboarding checklist confusion",
+  desc:"This dropped sharply after the redesigned checklist shipped in 4.12. The fix looks like it worked.",
+  now:3,prev:12,hist:[10,13,11,12,12,3],segs:["SMB"],firstSeg:null,accounts:["2 accounts"],
+  src:{j:1,s:2,n:0},arr:"—",
+  why:"<b>Fading:</b> 12 → 3 mentions (−75%). The remaining 3 are from accounts created before 5 Nov.",
+  quotes:[
+   {s:"s",ref:"#cs-onboarding",who:"Joana (CS) · 12 Nov",t:"<mark>Zero checklist tickets</mark> from new trials this week 🎉"},
+   {s:"j",ref:"SUP-2297",who:"Legacy trial",t:"Still seeing the old checklist? Step 3 doesn’t complete."}
+  ]},
+ {id:"t6",type:"fade",title:"Duplicate Slack integration notifications",
+  desc:"Mentions stopped after the RS-4690 dedupe fix was deployed.",
+  now:1,prev:7,hist:[4,6,8,7,7,1],segs:["Mid-Market"],firstSeg:null,accounts:["1 account"],
+  src:{j:1,s:0,n:0},arr:"—",
+  why:"<b>Fading:</b> 7 → 1 (−86%). The one remaining ticket was opened before the deploy.",
+  quotes:[{s:"j",ref:"SUP-2289",who:"Orbitals",t:"Getting each alert twice in #ops. (Opened 9 Nov, before the fix.)"}]}
+];
+const SRC={j:{n:"Jira",c:"j"},s:{n:"Slack",c:"s"},n:{n:"Notion",c:"n"}};
+const state={verified:{},flagged:{},filter:"all",seg:"all"};
+
+/* ---------------- NAV ---------------- */
+const URLS={jira:"rocketship.atlassian.net/jira/software/projects/RS/boards/12",slack:"app.slack.com/client/RKT/juno-pm",notion:"notion.so/rocketship/Weekly-Signal-Diff-9-15-Nov-2026",juno:"app.juno.pm/rocketship/weekly-diff/2026-w46"};
+function go(v){
+  document.querySelectorAll('.view').forEach(e=>e.classList.toggle('on',e.id==='v-'+v));
+  document.querySelectorAll('[data-go].step,[data-go].app').forEach(e=>e.classList.toggle('on',e.dataset.go===v));
+  document.getElementById('url').textContent=URLS[v];
+  if(v!=='jira'){toast(false);hint(false)}
+  closeDrawer();
+}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-go]');if(t){go(t.dataset.go)}});
+
+/* ---------------- JIRA ---------------- */
+const JC=[
+ ["To do",[["RS-4833","Usage meter: add tooltip on billing page","Story","#0E9F6E","LP"],["RS-4829","Role templates for workspace admins","Story","#0E9F6E","RA"],["RS-4821","SCIM DELETE queued behind nightly sync","Bug","#E5484D","TK",true]]],
+ ["In progress",[["RS-4810","Async export service, phase 1 (spike)","Spike","#7C3AED","TK"],["RS-4802","Dashboard widget drag & drop","Story","#0E9F6E","MJ"]]],
+ ["In review",[["RS-4795","Onboarding checklist v2 analytics","Task","#2563EB","LP"],["RS-4790","Audit log filters by actor","Story","#0E9F6E","RA"]]],
+ ["Done",[["RS-4690","Dedupe Slack integration notifications","Bug","#E5484D","TK"],["RS-4688","Checklist redesign release 4.12","Story","#0E9F6E","MJ"]]]
+];
+const AVC={MJ:"#5B4BDB",TK:"#0E9F6E",RA:"#D97706",LP:"#2563EB"};
+document.getElementById('jcols').innerHTML=JC.map(([h,cs])=>`<div class="col"><h4>${h} · ${cs.length}</h4>${cs.map(c=>`
+ <div class="card ${c[5]?'hl':''}">${c[1]}<br><span class="tag" style="background:${c[3]}22;color:${c[3]}">${c[2].toUpperCase()}</span>
+ ${c[5]?' <span class="jbadge">✦ Juno: linked to new theme</span>':''}
+ <div class="meta"><span>${c[0]}</span><span class="av" style="background:${AVC[c[4]]};margin:0">${c[4]}</span></div></div>`).join('')}</div>`).join('');
+
+/* ---------------- SLACK ---------------- */
+const order=["new","grow","seg","fade"];
+document.getElementById('slackblk').innerHTML=`<h5>✦ Weekly Signal Diff · 9–15 Nov</h5>`+
+ THEMES.map(t=>`<div class="row"><span class="chip ${TYPES[t.type].cls}">${TYPES[t.type].label}</span><span><b>${t.title}</b>: ${deltaTxt(t)}${t.firstSeg?`, first time in <b>${t.firstSeg}</b>`:''} · ${t.segs.join(', ')}</span></div>`).join('')+
+ `<div class="foot">⚠ Needs attention: SCIM theme touches 2 accounts in a renewal window.</div>`;
+
+/* ---------------- NOTION ---------------- */
+function deltaTxt(t){ if(t.prev===0)return `${t.now} mentions (was 0)`; const p=Math.round((t.now-t.prev)/t.prev*100); return `${t.prev} → ${t.now} (${p>0?'+':''}${p}%)`; }
+document.getElementById('ntldr').innerHTML=`<ul style="padding-left:22px;line-height:1.8">
+<li><b>Act this week:</b> SCIM de-provisioning is <b>new</b> and puts Enterprise renewals at risk. Bug RS-4821 is already in the sprint.</li>
+<li><b>Watch:</b> CSV export timeouts are <b>growing</b> since 4.12. Audit-log retention is reaching <b>SMB fintech</b> for the first time.</li>
+<li><b>Good news:</b> the onboarding checklist and Slack duplicate fixes are working. Both themes are <b>fading</b>.</li></ul>`;
+document.getElementById('nsections').innerHTML=order.map(ty=>{
+ const ts=THEMES.filter(t=>t.type===ty); if(!ts.length)return '';
+ return `<h2><span class="chip ${TYPES[ty].cls}" style="font-size:13px">${TYPES[ty].label}</span> ${ts.length} theme${ts.length>1?'s':''}</h2>`+
+ ts.map(t=>`<details class="toggle"><summary><span><b>${t.title}</b> · ${deltaTxt(t)}<br><span style="color:#91918E;font-size:13px">${t.segs.join(' · ')} · ${t.accounts.join(', ')}</span></span></summary>
+ <div class="inner"><p>${t.desc}</p>${t.quotes.map(q=>`<div class="q">“${q.t.replace(/<\/?mark>/g,'')}”<small>${SRC[q.s].n} · <a href="#">${q.ref}</a> · ${q.who}</small></div>`).join('')}
+ <p><a href="#" data-open="${t.id}" style="color:var(--juno);font-weight:600">Verify in Juno →</a></p></div></details>`).join('');
+}).join('');
+document.addEventListener('click',e=>{const t=e.target.closest('[data-open]');if(t){e.preventDefault();go('juno');setTimeout(()=>openDrawer(t.dataset.open),250)}});
+
+/* ---------------- JUNO ---------------- */
+function spark(h,color){
+ const w=130,ht=34,mx=Math.max(...h,1);
+ const pts=h.map((v,i)=>[i*(w/(h.length-1)),ht-4-(v/mx)*(ht-8)]);
+ const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+ const last=pts[pts.length-1];
+ return `<svg class="spark" width="${w}" height="${ht}"><path d="${d}" fill="none" stroke="#C9CBD3" stroke-width="1.5"/>
+ <path d="M${pts[pts.length-2].join(',')} L${last.join(',')}" stroke="${color}" stroke-width="2.5" fill="none"/>
+ <circle cx="${last[0]}" cy="${last[1]}" r="3.5" fill="${color}"/></svg><div style="font-size:10.5px;color:var(--ink-3)">last 6 weeks</div>`;
+}
+function renderKpis(){
+ const c=ty=>THEMES.filter(t=>t.type===ty).length;
+ const v=Object.keys(state.verified).length;
+ const k=[["all","All changes",THEMES.length,"vs 2–8 Nov","var(--juno)"],["new","New",c('new'),"never seen before",TYPES.new.color],["grow","Growing",c('grow'),">50% WoW",TYPES.grow.color],["seg","New segment",c('seg'),"first appearance",TYPES.seg.color],["fade","Fading",c('fade'),"<−50% WoW",TYPES.fade.color]];
+ document.getElementById('kpis').innerHTML=k.map(([id,l,n,s,col])=>`<div class="kpi ${state.filter===id?'on':''}" data-f="${id}"><div class="l"><i style="background:${col}"></i>${l}</div><div class="v">${n}</div><div class="s">${id==='all'?`${v}/${THEMES.length} verified · `:''}${s}</div></div>`).join('');
+}
+function renderFilters(){
+ const segs=["all","Enterprise","Mid-Market","SMB"];
+ document.getElementById('filters').innerHTML=`<span style="font-size:12px;color:var(--ink-3);margin-right:4px">Segment</span>`+segs.map(s=>`<button class="f ${state.seg===s?'on':''}" data-seg="${s}">${s==='all'?'All':s}</button>`).join('')+
+ `<span class="note">Sorted by impact (volume × ARR × novelty)</span>`;
+}
+function renderThemes(){
+ const list=THEMES.filter(t=>(state.filter==='all'||t.type===state.filter)&&(state.seg==='all'||t.segs.some(s=>s.startsWith(state.seg))));
+ document.getElementById('themes').innerHTML=list.length?list.map(t=>{
+  const ty=TYPES[t.type]; const p=t.prev?Math.round((t.now-t.prev)/t.prev*100):null;
+  return `<div class="theme" data-open="${t.id}">
+   <div><span class="chip ${ty.cls}">${ty.label}</span>${state.verified[t.id]?'<span class="verified">✓ Verified</span>':''}${state.flagged[t.id]?'<span class="flagged">⚑ Flagged</span>':''}
+    <div class="tt">${t.title}</div><div class="ds">${t.desc}</div>
+    <div class="segs">${t.segs.map(s=>`<span class="seg ${s===t.firstSeg?'first':''}">${s===t.firstSeg?'★ first time · ':''}${s}</span>`).join('')}<span class="seg">${t.accounts.join(', ')}</span></div></div>
+   <div class="spk">${spark(t.hist,ty.color)}</div>
+   <div class="srcmixw"><div class="srcmix">${Object.entries(t.src).filter(([,n])=>n).map(([k,n])=>`<span><span class="sq ${k}">${SRC[k].n[0]}</span>${n}</span>`).join('')}</div><div style="font-size:11px;color:var(--ink-3);margin-top:6px">${t.quotes.length} raw quotes</div></div>
+   <div class="delta"><b style="color:${ty.color}">${p===null?'NEW':(p>0?'+':'')+p+'%'}</b><small>${t.prev} → ${t.now} mentions</small></div>
+  </div>`}).join(''):`<div class="stable">No changed themes match this filter.</div>`;
+}
+function renderJuno(){renderKpis();renderFilters();renderThemes()}
+document.addEventListener('click',e=>{
+ const k=e.target.closest('[data-f]'); if(k){state.filter=k.dataset.f;renderJuno()}
+ const s=e.target.closest('[data-seg]'); if(s){state.seg=s.dataset.seg;renderJuno()}
+});
+
+/* drawer */
+let tmr=null;
+function openDrawer(id){
+ const t=THEMES.find(x=>x.id===id), ty=TYPES[t.type];
+ document.querySelectorAll('.theme').forEach(el=>el.classList.toggle('sel',el.dataset.open===id));
+ const d=document.getElementById('drawer');
+ d.innerHTML=`<div class="dr-head"><button class="x" onclick="closeDrawer()">×</button>
+  <span class="chip ${ty.cls}">${ty.label}</span> <span style="font-size:12px;color:var(--ink-3)">${deltaTxt(t)} · ${t.arr}</span>
+  <h3>${t.title}</h3><p>${t.desc}</p>
+  <div class="timer"><span>⏱ Check it</span><div class="bar"><i id="tbar"></i></div><span id="tsec">0s / ~30s</span></div></div>
+  <div class="dr-body">
+   <div class="why">${t.why}</div>
+   <div class="dr-sec">Raw evidence · ${t.quotes.length} of ${t.now} mentions</div>
+   ${t.quotes.map(q=>`<div class="qcard"><div class="qh"><span class="sq ${q.s}">${SRC[q.s].n[0]}</span>${SRC[q.s].n} · ${q.who}<a href="#" onclick="snack('Opening ${q.ref} in ${SRC[q.s].n}…');return false">${q.ref} ↗</a></div><div class="qt">“${q.t}”</div></div>`).join('')}
+   <div style="font-size:12px;color:var(--ink-3);margin-top:4px">＋ ${Math.max(t.now-t.quotes.length,0)} more mentions grouped by Juno · <u>show all</u></div>
+   <div class="dr-sec" style="margin-top:18px">Segments & accounts</div>
+   <div class="segs" style="display:flex;gap:6px;flex-wrap:wrap">${t.segs.map(s=>`<span class="seg ${s===t.firstSeg?'first':''}">${s}</span>`).join('')}${t.accounts.map(a=>`<span class="seg">${a}</span>`).join('')}</div>
+  </div>
+  <div class="dr-foot">
+   <button class="jbtn ok" onclick="verify('${id}')">✓ Looks right</button>
+   <button class="jbtn" onclick="flag('${id}')">⚑ Wrong grouping</button>
+   <button class="jbtn pri" style="margin-left:auto" onclick="snack('Draft Jira ticket created in RS backlog with ${t.quotes.length} linked quotes')">＋ Create Jira ticket</button>
+  </div>`;
+ d.classList.add('open');document.getElementById('scrim').classList.add('on');
+ let s=0;clearInterval(tmr);
+ requestAnimationFrame(()=>{});
+ tmr=setInterval(()=>{s++;const b=document.getElementById('tbar'),l=document.getElementById('tsec');if(!b){clearInterval(tmr);return}
+  b.style.width=Math.min(s/30*100,100)+'%';l.textContent=s+'s / ~30s';if(s>=30)clearInterval(tmr)},1000);
+}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('on');clearInterval(tmr);document.querySelectorAll('.theme.sel').forEach(e=>e.classList.remove('sel'))}
+document.getElementById('scrim').onclick=closeDrawer;
+document.addEventListener('click',e=>{const t=e.target.closest('.theme[data-open]');if(t&&document.getElementById('v-juno').classList.contains('on')){e.stopPropagation();openDrawer(t.dataset.open)}},true);
+function verify(id){const s=document.getElementById('tsec').textContent.split('s')[0];state.verified[id]=1;delete state.flagged[id];closeDrawer();renderJuno();snack(`Verified in ${s}s ✓ · Juno will keep this grouping`)}
+function flag(id){state.flagged[id]=1;delete state.verified[id];closeDrawer();renderJuno();snack('Thanks, Juno will re-cluster this theme and learn from it')}
+
+/* ---------------- helpers & intro ---------------- */
+function toast(on){document.getElementById('toast').classList.toggle('show',on)}
+function hint(on,txt){const h=document.getElementById('hint');if(txt)h.textContent=txt;h.style.opacity=on?1:0}
+let sn;function snack(m){const s=document.getElementById('snack');s.textContent=m;s.classList.add('on');clearTimeout(sn);sn=setTimeout(()=>s.classList.remove('on'),2600)}
+let introT=[];
+function intro(){
+ introT.forEach(clearTimeout);introT=[];
+ state.verified={};state.flagged={};state.filter='all';state.seg='all';renderJuno();
+ document.getElementById('clock').textContent='07:14';
+ go('jira');hint(true,'Monday 07:14. You’re planning the sprint in Jira…');
+ introT.push(setTimeout(()=>{document.getElementById('clock').textContent='07:15';toast(true);hint(true,'Click the Slack notification ↗')},2200));
+}
+document.getElementById('replay').onclick=intro;
+intro();
+</script>
+</body>
+</html>
