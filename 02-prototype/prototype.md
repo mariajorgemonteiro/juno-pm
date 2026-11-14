@@ -4,13 +4,14 @@
 
 ## Prototype link
 
-_The public share URL from your build tool. No share URL? A screenshot of the working flow is fine, the prompt is what is assessed._
+https://github.com/mariajorgemonteiro/juno-pm/blob/main/02-prototype/juno-prototype.html
 
 _____
 
 ## What it demonstrates
 
-_The one flow this prototype proves._
+Notification on Slack that the Weekly Diff Signal report is available.
+I can check on Notion and also on Juno App
 
 _____
 
