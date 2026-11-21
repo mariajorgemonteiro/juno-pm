@@ -2,7 +2,7 @@
 
 > _(one-line pitch: what Juno does, for whom, in one sentence)_
 
-_Your name · cohort · date_
+Maria Jorge Monteiro · Ai Product Management · Nov 13th - Dec 5th
 
 This repo is my final project for the **AI Product Management Certification**. Each module's artifact lives in its own folder.
 
