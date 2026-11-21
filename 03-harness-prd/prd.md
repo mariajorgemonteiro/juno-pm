@@ -11,7 +11,7 @@ RocketShip PMs need this handled: Juno drafts a summary of signals from Jira Tic
 | Surface | Specification |
 |---|---|
 | 01 Context | Sources:  - Jira: tickets created or updated in last 15 days in the project CSUPPORT (Customer support) and PREQ (Product Bugs and… |
-| 02 Tools | - search_jira(projects=["SUP","RS"], updated_from, updated_to) — READ - read_jira_issue(issue_key) — READ - read_slack_threads(channel_ids,… |
+| 02 Tools | - search_jira(projects=["CSUPPORT","PREQ"], updated_from, updated_to) — READ - read_jira_issue(issue_key) — READ -… |
 | 03 Loop | On-demand synthesis: starts when the pre-configured user asks, with pasted signals or a time period. |
 | 04 Memory | - On-demand synthesis: nothing is kept between requests. Each run starts fresh from what's given: specific signals, or a time period for… |
 | 05 Permissions | read auto · draft auto · write confirm · send auto |
@@ -24,13 +24,14 @@ RocketShip PMs need this handled: Juno drafts a summary of signals from Jira Tic
 Sources:
  - Jira: tickets created or updated in last 15 days in the project CSUPPORT (Customer support) and PREQ (Product Bugs and requests), including the description, comments, reporter's account and labels. It can also see the linked issues.
  - Slack: threads from the last 15 days in the public customer-facing channels only: #cs-escalations, #feedback-enterprise.
- - Notion: pages created or edited in the last 7 days in 3 databases: Customer Interviews, QBR / Account Notes, Sales Call Notes.
+ - Notion: pages created or edited in the last 15 days in 3 databases: Customer Interviews, QBR / Account Notes, Sales Call Notes.
 - Segment mapping: the Account Segments database in Notion (fields: Account, Aliases, Segment: SMB / Mid-Market / Enterprise, Vertical, Owner, Last reviewed). Juno uses it to detect a theme appearing in a segment for the first time. It's a Notion table rather than a CRM because it's maintained by Product and is enough for weekly reporting. Mentions from accounts not in the table are labelled "Unmapped" and listed separately in the report rather than assigned a guessed segment, because a wrong segment creates a false "new segment" signal.
 - Baseline: the themes from the last 6 Juno weekly reports, with counts, segments and accounts. This is what makes it a comparison with past weeks and not just a summary.
 
 Excluded:
  - Slack DMs and private channels. People didn't post there expecting to be analysed, and reading them would damage trust in the tool across the team.
  - Engineering-only Jira tasks with no customer origin (tech debt, internal tasks), bot and alert messages, release notes. These are internal noise, not customer signals, and would inflate theme counts.
+- Internal opinions and engineering telemetry are not customer signals, whatever channel they arrive through (including pasted on-demand inputs).
  - Drafts and personal Notion pages. They're unreviewed opinions, not customer evidence.
 - Juno's own past reports, and anything that quotes them, as signals. They're used only as the baseline. Otherwise Juno would count its own output as new evidence and themes would amplify themselves.
 - Personal contact details (emails, phone numbers) are removed from quotes. Account name and role are enough to verify a quote.
@@ -47,7 +48,7 @@ Unreachable source: Juno retries for 30 minutes. If a source is still down, it d
 
 **The verb list**
 
-- search_jira(projects=["SUP","RS"], updated_from, updated_to) — READ
+- search_jira(projects=["CSUPPORT","PREQ"], updated_from, updated_to) — READ
 - read_jira_issue(issue_key) — READ
 - read_slack_threads(channel_ids, from, to) — READ (only the channels on the approved list in 01 · Context)
 - query_notion_database(database_id, edited_from, edited_to) — READ (Customer Interviews, Account Notes, Sales Call Notes)
@@ -76,13 +77,14 @@ No write access to Jira, Slack or Notion sources (no comment, react, edit or del
 **Turn ceiling and escalation**
 
 On-demand synthesis: starts when the pre-configured user asks, with pasted signals or a time period. Same ceiling (25 turns, 150 tool calls). Periods longer than 30 days need the user's confirmation first, because cost and run time grow with the volume of signals. The quote and unthemed-signal escalation rules apply. The "more than 10 changed themes" rule doesn't, because on-demand runs don't compare with a baseline.
+Exclusions from 01 · Context apply to pasted signals too.
 
 Weekly Flow (one pass per weekly batch): collect the week's signals → group into themes → match to last week's themes → label with compute_theme_labels → check quotes with verify_quote → write the Notion draft → send the Slack DM.
 
 Ceiling: 25 model turns and 150 tool calls per run. A normal week (~350 items, ~6 changed themes) needs about 12 turns and about 80 calls. The ceiling gives roughly double that headroom. If Juno hits it, it publishes only the themes that already passed verification, with the banner "Partial report: limit reached", and lists what it didn't finish. It never cuts the report short without saying so.
 
 Escalate (no report published; Juno DMs pre-configured user the reason) when:
-- 2 consecutive failed calls to Jira, the segment table or the baseline. Without these the comparison is wrong, not just less complete (see 01 · Context).
+- 6 consecutive failed calls to Jira, the segment table or the baseline. Without these the comparison is wrong, not just less complete (see 01 · Context).
 - More than 10 themes are labelled as changed. RocketShip usually has 3–7 changes a week.  If "everything changed", the grouping probably broke; the product didn't suddenly change.
 More than 25% of the week's signals don't fit any theme. The grouping missed too much for the comparison to mean anything.
 More than 30% of quotes fail verify_quote. The model is paraphrasing or inventing evidence, and that breaks the 30-second check.
@@ -91,7 +93,7 @@ Not an escalation: a week with 0 changes. "Nothing moved" is a valid result, and
 
 **Latency and cost target**
 
-On-demand: results in under 5 minutes for a period of up to 7 days. Same $5 ceiling per request. If the estimate is higher, Juno asks the user to narrow the period before running.
+On-demand: results in under 5 minutes for a period of up to 15 days. Same $5 ceiling per request. If the estimate is higher, Juno asks the user to narrow the period before running.
 
 Weekly flow: the run starts Monday at 06:00 and the Notion draft is ready by 07:00 (under 60 minutes, almost every week). The Slack DM goes out at 07:15. If the run isn't finished by 07:10, pre-configured user gets a DM saying "Report delayed" instead of silence. There's no target in seconds, because the run happens before anyone is at work. What matters is that it's ready before sprint planning.  Cost ceiling $5 per weekly run, about $20/month per PM. Costs stay flat because Juno compares against last week's summary, not all past raw signals.
 
@@ -120,7 +122,7 @@ Weekly themes are used as the baseline for 6 weeks, then archived. On-demand syn
 
 **Justification**
 
-Read · auto. Blast radius: none outside Juno. Nothing is changed or shared. The privacy risk is limited by scope: only the approved Slack channels, the SUP and RS projects in Jira, and the 3 Notion databases. No DMs or private channels.
+Read · auto. Blast radius: none outside Juno. Nothing is changed or shared. The privacy risk is limited by scope: only the approved Slack channels, the CSUPPORT and PREQ projects in Jira, and the 3 Notion databases. No DMs or private channels.
 
 Draft · auto. Blast radius: one person. The Notion report is created with status "Draft" and is visible only to the pre-configured user. Fully recoverable: it can be edited or deleted, and nothing reaches the team until the user shares it.
 
@@ -135,6 +137,7 @@ Write · confirm. Juno has no write tools in v1: no Jira tickets, no edits to so
 - Quotes are real: verify_quote checks that every quote matches its source word for word.
 - Duplicates: a code check makes sure the same issue from the same account in a ticket and a Slack thread is counted once.
 - Labels: new, growing, fading and new segment come from fixed numeric rules applied to the counts, not from the model's judgement. compute_theme_labels recalculates each label and confirms it matches the rule.
+- Excluded types: any item matching the exclusion rules is dropped and listed under 'Excluded' with the reason.
 - Coverage is complete: a code check confirms every source was read and no more than 25% of signals are unthemed.
 
 **Failure behaviour**
