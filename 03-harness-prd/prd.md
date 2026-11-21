@@ -10,7 +10,7 @@ RocketShip PMs need this handled: Juno drafts a summary of signals from Jira Tic
 
 | Surface | Specification |
 |---|---|
-| 01 Context | Sources:  - Jira: tickets created or updated in last 15 days in the project CSUPPORT (Customer support) and PREQ (Product Bugs and… |
+| 01 Context | Sources:  - Jira: tickets created or updated in last 7 days in the project CSUPPORT (Customer support) and PREQ (Product Bugs and… |
 | 02 Tools | - search_jira(projects=["CSUPPORT","PREQ"], updated_from, updated_to) — READ - read_jira_issue(issue_key) — READ -… |
 | 03 Loop | On-demand synthesis: starts when the pre-configured user asks, with pasted signals or a time period. |
 | 04 Memory | - On-demand synthesis: nothing is kept between requests. Each run starts fresh from what's given: specific signals, or a time period for… |
@@ -22,16 +22,19 @@ RocketShip PMs need this handled: Juno drafts a summary of signals from Jira Tic
 **Required sources, and exclusions**
 
 Sources:
- - Jira: tickets created or updated in last 15 days in the project CSUPPORT (Customer support) and PREQ (Product Bugs and requests), including the description, comments, reporter's account and labels. It can also see the linked issues.
- - Slack: threads from the last 15 days in the public customer-facing channels only: #cs-escalations, #feedback-enterprise.
- - Notion: pages created or edited in the last 15 days in 3 databases: Customer Interviews, QBR / Account Notes, Sales Call Notes.
+ - Jira: tickets created or updated in last 7 days in the project CSUPPORT (Customer support) and PREQ (Product Bugs and requests), including the description, comments, reporter's account and labels. It can also see the linked issues.
+ - Slack: threads from the last 7 days in the public customer-facing channels only: #cs-escalations, #feedback-enterprise.
+ - Notion: pages created or edited in the last 7 days in 3 databases: Customer Interviews, QBR / Account Notes, Sales Call Notes.
 - Segment mapping: the Account Segments database in Notion (fields: Account, Aliases, Segment: SMB / Mid-Market / Enterprise, Vertical, Owner, Last reviewed). Juno uses it to detect a theme appearing in a segment for the first time. It's a Notion table rather than a CRM because it's maintained by Product and is enough for weekly reporting. Mentions from accounts not in the table are labelled "Unmapped" and listed separately in the report rather than assigned a guessed segment, because a wrong segment creates a false "new segment" signal.
 - Baseline: the themes from the last 6 Juno weekly reports, with counts, segments and accounts. This is what makes it a comparison with past weeks and not just a summary.
+- Weekly report: the frozen Monday–Sunday snapshot (7 days). On-demand: up to 15 days by default.
+
+What counts as one signal:
+A signal is one distinct ask or problem from one account in one source item. One item can produce several signals: an interview that mentions a CSV export crash, a too-bright nav bar and dark mode is 3 signals, and a ticket about a 403 error and a missing invoice is 2. Each signal keeps a link to its source item and the exact quote it came from. Off-topic content (small talk, personal remarks) is not a signal. Theme counts, the 25% unthemed check and duplicate detection all count signals, not source items, so one long interview doesn't count as one vote and one item that mixes several issues doesn't get forced into a single theme.
 
 Excluded:
  - Slack DMs and private channels. People didn't post there expecting to be analysed, and reading them would damage trust in the tool across the team.
- - Engineering-only Jira tasks with no customer origin (tech debt, internal tasks), bot and alert messages, release notes. These are internal noise, not customer signals, and would inflate theme counts.
-- Internal opinions and engineering telemetry are not customer signals, whatever channel they arrive through (including pasted on-demand inputs).
+ - Internal opinions and engineering telemetry, whatever channel they arrive through (including pasted on-demand inputs): exec or stakeholder requests, engineering-only Jira tasks with no customer origin (tech debt, internal tasks), monitoring and alert threads, bot messages and release notes. They show what the company thinks or how the system behaves, not what customers need, and would inflate theme counts. An exec request like "we need an AI story" would otherwise show up as a customer theme.
  - Drafts and personal Notion pages. They're unreviewed opinions, not customer evidence.
 - Juno's own past reports, and anything that quotes them, as signals. They're used only as the baseline. Otherwise Juno would count its own output as new evidence and themes would amplify themselves.
 - Personal contact details (emails, phone numbers) are removed from quotes. Account name and role are enough to verify a quote.
@@ -55,7 +58,7 @@ Unreachable source: Juno retries for 30 minutes. If a source is still down, it d
 - lookup_account_segment(account_name) — READ (Account Segments table in Notion; returns "Unmapped" when there's no match)
 - read_synthesis_reports(status=["draft","published"], from, to) — READ (past on-demand and weekly reports, used as context only, not as the baseline)
 - get_baseline_themes(weeks=6) — READ (the themes, counts and segments from past Juno reports)
-- verify_quote(source_ref, quote_text) — READ (confirms the quote exists word for word in the source)
+- verify_quote(source_ref, quote_text) — READ (confirms the quote exists word for word in the source. For pasted signals, source_ref is the paste ID (P1, P2…) Juno assigns to each pasted item at the start of the run, and the check runs against the pasted text.)
 - compute_theme_labels(current_counts, baseline) — READ (a fixed calculation with no side effects; it applies the new / growing / fading / new-segment thresholds, so the model doesn't decide the labels)
 - create_notion_report(period, type=["weekly","on_demand"], themes, evidence) — DRAFT (always created with status "Draft")
 - send_slack_dm(summary, report_url) — SEND (the recipient is fixed to a pre-configured user; Juno can't choose who to send to)
@@ -84,7 +87,7 @@ Weekly Flow (one pass per weekly batch): collect the week's signals → group in
 Ceiling: 25 model turns and 150 tool calls per run. A normal week (~350 items, ~6 changed themes) needs about 12 turns and about 80 calls. The ceiling gives roughly double that headroom. If Juno hits it, it publishes only the themes that already passed verification, with the banner "Partial report: limit reached", and lists what it didn't finish. It never cuts the report short without saying so.
 
 Escalate (no report published; Juno DMs pre-configured user the reason) when:
-- 6 consecutive failed calls to Jira, the segment table or the baseline. Without these the comparison is wrong, not just less complete (see 01 · Context).
+- Jira, the segment table or the baseline is still unreachable after 30 minutes of retries. Without these the comparison is wrong, not just less complete (see 01 · Context).
 - More than 10 themes are labelled as changed. RocketShip usually has 3–7 changes a week.  If "everything changed", the grouping probably broke; the product didn't suddenly change.
 More than 25% of the week's signals don't fit any theme. The grouping missed too much for the comparison to mean anything.
 More than 30% of quotes fail verify_quote. The model is paraphrasing or inventing evidence, and that breaks the 30-second check.
@@ -102,6 +105,7 @@ Weekly flow: the run starts Monday at 06:00 and the Notion draft is ready by 07:
 **What persists, at what scope**
 
 - On-demand synthesis: nothing is kept between requests. Each run starts fresh from what's given: specific signals, or a time period for Juno to search in Jira, Slack and Notion. It can read previous synthesis reports, both drafts and published, as context.
+Pasted signals are kept only for the duration of the run. If the synthesis is saved as a Notion report, the pasted items are attached to it, so every quote stays checkable later.
 
 - Weekly report: scoped to the product team (RocketShip). Juno must check the previous weekly reports in Notion to compare this week with last. It saves only the theme list (name, count, segments, accounts, quote links), not the raw signals, which stay in their source tools. Drafts can be read as context, but only reviewed reports count as the baseline for "what changed", so an unchecked mistake isn't carried into next week.
 
@@ -135,14 +139,17 @@ Write · confirm. Juno has no write tools in v1: no Jira tickets, no edits to so
 **The check before output ships**
 
 - Quotes are real: verify_quote checks that every quote matches its source word for word.
-- Duplicates: a code check makes sure the same issue from the same account in a ticket and a Slack thread is counted once.
+- Pasted quotes: checked against the pasted text and labelled "Source: pasted". If a pasted item contains a real reference (a Jira key or a Slack link), Juno checks the quote against that source instead, which also catches edits made to the pasted copy.
+- Duplicates: a code check makes sure the same signal (same ask, same account) in a ticket and a Slack thread is counted once.
 - Labels: new, growing, fading and new segment come from fixed numeric rules applied to the counts, not from the model's judgement. compute_theme_labels recalculates each label and confirms it matches the rule.
-- Excluded types: any item matching the exclusion rules is dropped and listed under 'Excluded' with the reason.
-- Coverage is complete: a code check confirms every source was read and no more than 25% of signals are unthemed.
+- Excluded types: any item matching the exclusion rules is dropped and listed under "Excluded" with the reason.
+- Coverage is complete: a code check confirms every source was read and no more than 25% of signals (as defined in 01 · Context) are unthemed.
+
 
 **Failure behaviour**
 
 - Quote fails: it's removed, and the theme shows "1 quote removed: not found in source". If a theme is left with fewer than 2 verified quotes, it's marked "Low confidence: needs review".
+- Small on-demand runs (fewer than 20 signals): the 2-quote minimum is replaced by a "Single source" tag, and unthemed signals are listed instead of triggering an escalation.
 - Possible duplicate: counted once and marked "Possible duplicate". Juno undercounts rather than inflates.
 - Label doesn't match the rule: the rule's label wins, and the theme is marked for review.
 - Coverage fails: the report shows a banner naming the missing source, and affected themes show "Not comparable this week" instead of fading.
