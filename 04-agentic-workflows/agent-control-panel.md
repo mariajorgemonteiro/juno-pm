@@ -49,8 +49,6 @@ No Slack DMs, private channels or drafts, except for the pre-configured user.
 
 **Fallback Protocols:**
 
-After 3 failed retrievals, degrade to "cautious mode" (no priorities, just thread links). After 2 tool errors, escalate to PM with full trace.
-
 Jira, segment table or baseline down after 30 min of retries → no report, DM the reason. Slack or Notion down → report with a "missing source" banner. Limit reached → partial report with a banner. Failed checks → Draft with a "manual review" banner.
 
 **Checkpoints:**
