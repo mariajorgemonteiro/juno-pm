@@ -12,7 +12,7 @@ Insights synthesis: every Monday, Juno compares last week's customer signals fro
 
 - Max steps: 25 model turns and 150 tool calls per run (a normal week uses ~12 turns / ~80 calls).
 - Abort: the same tool errors 3x in a row on the same call (an error or timeout, not an empty or negative result). Source outages follow the 30-min retry rule.
-- Hard timeout: weekly run 60 min wall clock (06:00–07:00), "Report delayed" DM at 07:10. On-demand: 5 min for periods up to 15 days.
+Hard timeout: weekly run targets 60 min (06:00–07:00); hard stop at 07:10 → publishes verified themes as a partial report and DMs "Report delayed". On-demand: 5 min for periods up to 15 days.
 
 **Structured Tool Outputs** (Tools):
 
@@ -21,7 +21,7 @@ Insights synthesis: every Monday, Juno compares last week's customer signals fro
 - lookup_account_segment → OK: {account, segment}. No match: {segment: "Unmapped"}, never a guess.
 - get_baseline_themes → OK: {weeks_found, themes[{name, count, segments, accounts}]}. weeks_found < 1 = "failed" (no comparison possible).
 - verify_quote → {match: true | false, source_ref}. false = quote removed.
-compute_theme_labels → {theme, label: new | growing | fading | new_segment | stable, rule_applied}.
+- compute_theme_labels → {theme, label: new | growing | fading | new_segment | stable, rule_applied}.
 - create_notion_report → OK: {page_url, status: "Draft"}. FAIL: {status: "error", reason}.
 - send_slack_dm → OK: {delivered: true, recipient_id}. FAIL: {delivered: false, reason}.
 
@@ -45,7 +45,7 @@ Can read sources, group themes, create the Notion report as Draft and DM the pre
 **Access Control:**
 
 Read-only on Jira CSUPPORT and PREQ, two public Slack channels (#cs-escalations, #feedback-enterprise) and four Notion databases (Customer Interviews, QBR/Account Notes, Sales Call Notes, Account Segments), plus past Juno reports. 
-No Slack DMs, private channels or drafts, except for the pre-configured user.
+No Slack DMs, private channels or Notion drafts/personal pages. The only DM Juno can send goes to the pre-configured user.
 
 **Fallback Protocols:**
 
